@@ -26,32 +26,32 @@ async function main() {
 
 
 const UserSchema = new mongoose.Schema({
-  username: {type: String, unique: true, required: true},
-  count: {type: Number},
+  username: { type: String, unique: true, required: true },
+  count: { type: Number },
   log: [{
-    description: {type: String},
-    duration: {type:Number, min: 1},
-    date: {type: Date}
+    description: { type: String },
+    duration: { type: Number, min: 1 },
+    date: { type: String }
   }]
 });
 const User = new mongoose.model('Users', UserSchema);
 
 app.use(bodyParser.urlencoded({ extended: true }));
 
-app.post('/api/users', (req, res) =>{
+app.post('/api/users', (req, res) => {
   console.log('here');
   const usernameReq = req.body.username;
-  User.findOne({username: usernameReq}, (err, data) =>{
-    if(err) console.log(err);
-    if(data){
-      res.json({username: data.username, _id: data._id})
-    }else{
-      User.create({username: usernameReq}, (err) => {
-        if(err) console.log();
-        User.findOne({username: usernameReq, count: 0}, (err, data) => {
+  User.findOne({ username: usernameReq }, (err, data) => {
+    if (err) console.log(err);
+    if (data) {
+      res.json({ username: data.username, _id: data._id })
+    } else {
+      User.create({ username: usernameReq, count: 0 }, (err) => {
+        if (err) console.log();
+        User.findOne({ username: usernameReq }, (err, data) => {
           if (err) console.log(err);
           if (data) {
-            res.json({username: data.username, _id: data._id})
+            res.json({ username: data.username, _id: data._id })
           }
         })
       });
@@ -59,24 +59,27 @@ app.post('/api/users', (req, res) =>{
   });
 });
 
-app.post('/api/users/:_id/exercises', (req, res)=>{
+app.post('/api/users/:_id/exercises', (req, res) => {
   const _idReq = req.params._id;
   const descriptionReq = req.body.description;
   const durationReq = Number(req.body.duration);
-  const dateReq = new Date(req.body.date);
+  const dateReq = new Date(req.body.date || new Date());
   //https://stackoverflow.com/questions/41501939/how-to-update-a-array-value-in-mongoose
   User.findByIdAndUpdate(_idReq,
       {
-          "$push": {"log":
-                { "description": descriptionReq,
-                  "duration": durationReq,
-                  "date": dateReq
-                }},
-          "$inc": {"count": 1}
+        "$push": {
+          "log":
+              {
+                "description": descriptionReq,
+                "duration": durationReq,
+                "date": dateReq.toDateString()
+              }
+        },
+        "$inc": { "count": 1 }
       },
-      {"new": true},
-      (err, data) =>{
-        if(err) console.log(err);
+      { "new": true },
+      (err, data) => {
+        if (err) console.log(err);
         res.json({
           "_id": data._id,
           "username": data.username,
@@ -89,50 +92,49 @@ app.post('/api/users/:_id/exercises', (req, res)=>{
 });
 
 
-app.get('/api/users/:_id/logs', (req, res) =>{
+app.get('/api/users/:_id/logs', (req, res) => {
   //https://stackoverflow.com/questions/11973304/mongodb-mongoose-querying-at-a-specific-date
   const _idReq = req.params._id;
   const fromReq = req.query.from || minDate;
   const toReq = req.query.to || maxDate;
-  const limitReq = req.query.limit;
-
-  const filter = {
-    _id: _idReq,
-  }
-  User.findById(_idReq).exec((err, data)=>{
-      if(err) console.log(err);
-      let logs = [];
-      for (let i = 0; i < data.log.length; i++){
-
-        if(data.log[i].date >= fromReq && data.log[i].date <= toReq){
-          const log = {
-            description: data.log[i].description,
-            duration: data.log[i].duration,
-            date: data.log[i].date.toDateString()
+  const limitReq = req.query.limit || Number.MAX_VALUE;
+  console.log(_idReq);
+  console.log(fromReq);
+  console.log(toReq);
+  console.log(limitReq);
+  User.findById(_idReq).exec((err, data) => {
+        if (err) console.log(err);
+        let logs = [];
+        for (let i = 0; i < data.log.length; i++) {
+          const dDay = new Date(data.log[i].date);
+          if (dDay >= new Date(fromReq) && dDay <= new Date(toReq)) {
+            const log = {
+              description: data.log[i].description,
+              duration: data.log[i].duration,
+              date: data.log[i].date
+            }
+            logs.push(log);
           }
-          logs.push(log);
         }
-      }
+        logs = logs.slice(0, Math.min(logs.length, limitReq))
+        const s = {
+          _id: data._id,
+          username: data.username,
+          count: data.count,
+          log: logs
+        }
+        console.log(s);
+        res.json(s);
 
-      res.json({
-            username: data.username,
-            count: data.count,
-            _id: data._id,
-            log: logs
-          }
-      )
-    }
+      }
   )
 });
-
-
-
-
-
-
-
-
-
+app.get('/api/users', (req, res) => {
+  User.find({}, { username: 1 }, (err, data) => {
+    if (err) console.log(err);
+    res.json(data);
+  })
+})
 
 
 const listener = app.listen(process.env.PORT || 3000, () => {
